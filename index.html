@@ -1,0 +1,424 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FacePick - Real Random Auto Zoom</title>
+    
+    <script defer src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.25/jspdf.plugin.autotable.min.js"></script>
+    
+    <style>
+        :root {
+            --primary: #2563eb;
+            --success: #22c55e;
+            --warning: #f59e0b;
+            --danger: #ef4444;
+            --bg: #f8fafc;
+            --card: #ffffff;
+            --text: #1e293b;
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            margin: 0;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        header { text-align: center; margin-bottom: 25px; }
+        header h1 { margin: 0; color: var(--primary); font-size: 2.5rem; }
+        header p { margin: 5px 0 0; color: #64748b; }
+
+        /* MENU NAVIGASI ATAS */
+        .menu-navigation {
+            display: flex;
+            gap: 15px;
+            margin-bottom: 25px;
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .nav-btn {
+            flex: 1;
+            padding: 15px;
+            font-size: 15px;
+            font-weight: 700;
+            background: #e2e8f0;
+            color: #475569;
+            border: none;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .nav-btn.active {
+            background: var(--primary);
+            color: white;
+            box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+        }
+
+        .main-content { max-width: 900px; width: 100%; }
+
+        .tab-panel {
+            display: none;
+            background: var(--card);
+            border-radius: 16px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            padding: 25px;
+        }
+
+        .tab-panel.active { display: block; }
+
+        /* INPUT & TABEL */
+        .input-group { display: flex; gap: 10px; margin-bottom: 15px; }
+        input, select { padding: 10px 14px; border: 1px solid #cbd5e1; border-radius: 8px; font-size: 14px; }
+        input[type="text"] { flex: 1; }
+        button { padding: 10px 20px; border: none; border-radius: 8px; font-weight: 600; cursor: pointer; }
+        .btn-primary { background: var(--primary); color: white; }
+        .btn-success { background: var(--success); color: white; }
+        .btn-secondary { background: #64748b; color: white; }
+        .btn-danger { background: var(--danger); color: white; }
+
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e2e8f0; }
+        th { background-color: #f1f5f9; color: #475569; }
+
+        .status-badge { padding: 4px 8px; border-radius: 6px; font-size: 12px; font-weight: bold; }
+        .badge-hadir { background: #dcfce7; color: #15803d; }
+        .badge-sakit { background: #dbeafe; color: #1d4ed8; }
+        .badge-izin { background: #fef3c7; color: #b45309; }
+        .badge-alpa { background: #fee2e2; color: #b91c1c; }
+
+        /* BINGKAI KOTAK KAMERA STABIL */
+        .camera-container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
+        
+        .camera-box {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 14px;
+            overflow: hidden; 
+            border: 4px solid #cbd5e1;
+            box-shadow: 0 8px 24px rgba(0,0,0,0.1);
+        }
+        
+        /* WRAPPER INTERNAL UNTUK BERGERAK SECARA ACAK */
+        .camera-scaler-wrapper {
+            width: 100%;
+            height: 100%;
+            position: absolute;
+            top: 0;
+            left: 0;
+            transition: transform 0.4s cubic-bezier(0.25, 1, 0.5, 1);
+        }
+
+        /* LIVE FEED VIDEO & CANVAS (EFEK CERMIN) */
+        video, canvas { 
+            width: 100%; 
+            height: 100%; 
+            object-fit: cover; 
+            transform: scaleX(-1); 
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+
+        .action-zone { width: 100%; max-width: 500px; display: flex; flex-direction: column; gap: 10px; align-items: center; }
+        #targetNameInput { width: 100%; text-align: center; font-size: 18px; font-weight: bold; border: 2px solid var(--primary); }
+        .scoring-buttons { display: flex; gap: 10px; width: 100%; display: none; }
+        .scoring-buttons button { flex: 1; }
+    </style>
+</head>
+<body>
+
+    <header>
+        <h1>✨ FacePick </h1>
+        <p>Sistem Absensi Kelas & Deteksi Zoom Dinamis (TKJ Real Random)</p>
+    </header>
+
+    <div class="menu-navigation">
+        <button id="btn-nav-1" class="nav-btn active" onclick="pindahMenu('absen-tab')">📋 ABSENSI KELAS</button>
+        <button id="btn-nav-2" class="nav-btn" onclick="pindahMenu('facepick-tab')">🎯 FACEPICK</button>
+    </div>
+
+    <div class="main-content">
+        
+        <div id="absen-tab" class="tab-panel active">
+            <h2>📋 Form Pencatatan Absensi</h2>
+            <div class="input-group">
+                <input type="text" id="namaSiswa" placeholder="Ketik nama siswa...">
+                <select id="statusAbsen">
+                    <option value="Hadir">Hadir</option>
+                    <option value="Sakit">Sakit</option>
+                    <option value="Izin">Izin</option>
+                    <option value="Alpa">Alpa</option>
+                </select>
+                <button class="btn-primary" onclick="tambahSiswa()">+ Tambah</button>
+            </div>
+            <button class="btn-secondary" onclick="eksporPDF()">📄 Ekspor Ke PDF</button>
+            <table>
+                <thead>
+                    <tr>
+                        <th>No</th>
+                        <th>Nama</th>
+                        <th>Keterangan</th>
+                        <th>Nilai Kamera</th>
+                        <th>Total Poin</th>
+                        <th>Aksi</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelAbsen"></tbody>
+            </table>
+        </div>
+
+        <div id="facepick-tab" class="tab-panel">
+            <h2>🎯 Kamera Pemburu (Mengejar Wajah Acak)</h2>
+            <div class="camera-container">
+                
+                <div class="camera-box">
+                    <div class="camera-scaler-wrapper" id="cameraScaler">
+                        <video id="video" autoplay muted playsinline></video>
+                    </div>
+                </div>
+                
+                <div id="statusText" style="font-weight: 600; color: var(--primary);">Kamera Standby. Klik MULAI KAMERA di bawah.</div>
+                
+                <div class="action-zone">
+                    <button class="btn-success" id="btnPlay" style="width:100%; padding:12px;" onclick="nyalakanKamera()">🟢 PLAY / MULAI KAMERA</button>
+                    <button class="btn-primary" id="btnAcak" style="width:100%; padding:12px; display:none;" onclick="acakSiswa()">🎯 CARI SISWA ACAK</button>
+                    <button class="btn-secondary" id="btnReset" style="width:100%; display:none;" onclick="resetZoom()">🔄 Reset Zoom Kamera</button>
+                    
+                    <input type="text" id="targetNameInput" style="display:none;" placeholder="Ketik nama siswa terpilih di sini...">
+                    <div class="scoring-buttons" id="scoringButtons">
+                        <button class="btn-success" onclick="beriNilai('Sukses')">🟢 Sukses (+3)</button>
+                        <button class="btn-warning" onclick="beriNilai('Good')">🟡 Good (+1)</button>
+                        <button class="btn-secondary" onclick="beriNilai('Hadir')">🔵 Hadir (+0)</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        let siswaList = JSON.parse(localStorage.getItem('siswaList')) || [];
+        const video = document.getElementById('video');
+        const scalerWrapper = document.getElementById('cameraScaler');
+        const statusText = document.getElementById('statusText');
+        const btnPlay = document.getElementById('btnPlay');
+        const btnAcak = document.getElementById('btnAcak');
+        const btnReset = document.getElementById('btnReset');
+        const targetNameInput = document.getElementById('targetNameInput');
+        const scoringButtons = document.getElementById('scoringButtons');
+
+        let isZoomed = false;
+        let localStream = null;
+        let canvas = null;
+        let displaySize = { width: 640, height: 480 };
+
+        function pindahMenu(tabId) {
+            document.getElementById('absen-tab').classList.remove('active');
+            document.getElementById('facepick-tab').classList.remove('active');
+            document.getElementById('btn-nav-1').classList.remove('active');
+            document.getElementById('btn-nav-2').classList.remove('active');
+
+            document.getElementById(tabId).classList.add('active');
+            if(tabId === 'absen-tab') document.getElementById('btn-nav-1').classList.add('active');
+            if(tabId === 'facepick-tab') document.getElementById('btn-nav-2').classList.add('active');
+        }
+
+        async function nyalakanKamera() {
+            statusText.innerText = "Memuat data struktur AI Jarak Jauh... Mohon tunggu.";
+            try {
+                if (!faceapi.nets.tinyFaceDetector.params) {
+                    await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/');
+                }
+                
+                localStream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 } });
+                video.srcObject = localStream;
+                
+                btnPlay.style.display = 'none';
+                btnAcak.style.display = 'block';
+                statusText.innerText = "Kamera Aktif! Siap mengunci wajah di kelas.";
+                statusText.style.color = "var(--success)";
+            } catch (err) {
+                statusText.innerText = "Gagal memuat! Pastikan memberikan izin akses kamera di Chrome.";
+                console.error(err);
+            }
+        }
+
+        video.addEventListener('play', () => {
+            canvas = faceapi.createCanvasFromMedia(video);
+            scalerWrapper.append(canvas);
+            displaySize = { width: scalerWrapper.clientWidth, height: scalerWrapper.clientHeight };
+            faceapi.matchDimensions(canvas, displaySize);
+        });
+
+        // FUNGSI ACAK UTAMA - ZOOM DINAMIS MENGIKUTI POSISI TARGET NYATA
+        async function acakSiswa() {
+            if (!localStream) return alert("Nyalakan kamera terlebih dahulu!");
+            
+            statusText.innerText = "⚡ AI Sedang Memindai Seluruh Barisan Kelas...";
+            statusText.style.color = "var(--warning)";
+
+            const option = new faceapi.TinyFaceDetectorOptions({ inputSize: 512, scoreThreshold: 0.25 });
+            const detections = await faceapi.detectAllFaces(video, option);
+            
+            const resizedDetections = faceapi.resizeResults(detections, displaySize);
+            
+            if (resizedDetections.length === 0) {
+                statusText.innerText = "❌ Wajah gagal terdeteksi. Silakan coba klik acak kembali!";
+                statusText.style.color = "var(--danger)";
+                return alert("Wajah siswa tidak terbaca AI. Pastikan arah kamera sudah lurus.");
+            }
+
+            isZoomed = true;
+
+            // Pilih wajah secara acak
+            const randomIdx = Math.floor(Math.random() * resizedDetections.length);
+            const targetFace = resizedDetections[randomIdx].box;
+            
+            // Gambar satu kotak hijau penanda hanya untuk target terpilih
+            const ctx = canvas.getContext('2d');
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            faceapi.draw.drawDetections(canvas, [resizedDetections[randomIdx]]);
+
+            // Koordinat pusat wajah asli
+            const faceCenterX = targetFace.x + (targetFace.width / 2);
+            const faceCenterY = targetFace.y + (targetFace.height / 2);
+
+            const zoomFactor = 2.5; 
+            
+            // 🔥 PERBAIKAN RUMUS: Menghitung perpindahan secara akurat agar berpusat ke koordinat wajah target
+            // Karena video dibalik kaca cermin (scaleX -1), titik geser dihitung relatif dari kanan bingkai
+            const moveX = (scalerWrapper.clientWidth / 2) - (faceCenterX * zoomFactor);
+            const moveY = (scalerWrapper.clientHeight / 2) - (faceCenterY * zoomFactor) + 20; // +20 offset vertikal biar dahi gak kepotong
+
+            // Eksekusi zoom internal dinamis mengarah ke wajah siswa yang terpilih
+            scalerWrapper.style.transform = `scale(${zoomFactor}) translate(${moveX / zoomFactor}px, ${moveY / zoomFactor}px)`;
+            
+            statusText.innerText = `🎯 TARGET DIKUNCI! (Total terdeteksi di kelas: ${resizedDetections.length} orang)`;
+            statusText.style.color = "var(--danger)";
+            btnAcak.style.display = "none";
+            btnReset.style.display = "block";
+            targetNameInput.style.display = "block";
+            scoringButtons.style.display = "flex";
+            
+            targetNameInput.scrollIntoView({ behavior: 'smooth' });
+            targetNameInput.focus();
+        }
+
+        function resetZoom() {
+            scalerWrapper.style.transform = "scale(1) translate(0px, 0px)";
+            
+            if (canvas) {
+                const ctx = canvas.getContext('2d');
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+            }
+
+            btnAcak.style.display = "block";
+            btnReset.style.display = "none";
+            targetNameInput.style.display = "none";
+            scoringButtons.style.display = "none";
+            targetNameInput.value = '';
+            statusText.innerText = "Kamera Aktif. Siap memburu target berikutnya.";
+            statusText.style.color = "var(--primary)";
+            isZoomed = false;
+        }
+
+        // LOCAL STORAGE ENGINE
+        function tambahSiswa() {
+            const nama = document.getElementById('namaSiswa').value.trim();
+            const status = document.getElementById('statusAbsen').value;
+            if(!nama) return alert("Ketik nama siswanya terlebih dahulu!");
+
+            siswaList.push({ nama: nama, status: status, tambahan: '-', poin: status === 'Hadir' ? 1 : 0 });
+            document.getElementById('namaSiswa').value = '';
+            updateTabel();
+        }
+
+        function hapusSiswa(index) {
+            siswaList.splice(index, 1);
+            updateTabel();
+        }
+
+        function updateTabel() {
+            localStorage.setItem('siswaList', JSON.stringify(siswaList));
+            const tbody = document.getElementById('tabelAbsen');
+            tbody.innerHTML = '';
+            siswaList.forEach((s, idx) => {
+                tbody.innerHTML += `
+                    <tr>
+                        <td>${idx + 1}</td>
+                        <td><strong>${s.nama}</strong></td>
+                        <td><span class="status-badge badge-${s.status.toLowerCase()}">${s.status}</span></td>
+                        <td>${s.tambahan}</td>
+                        <td><strong>${s.poin} Poin</strong></td>
+                        <td><button class="btn-danger" style="padding:4px 8px; font-size:12px;" onclick="hapusSiswa(${idx})">Hapus</button></td>
+                    </tr>
+                `;
+            });
+        }
+
+        function beriNilai(jenis) {
+            const namaInput = targetNameInput.value.trim();
+            if(!namaInput) return alert("Silakan ketik nama siswa terpilih!");
+
+            // Cari apakah nama siswa ini sudah ada di database tabel atau belum
+            let siswa = siswaList.find(s => s.nama.toLowerCase() === namaInput.toLowerCase());
+            
+            // Jika siswa BELUM ADA di tabel (Baru pertama kali di-input lewat kamera)
+            if(!siswa) {
+                let poinAwal = 0; // Default awal banget 0 poin
+                if (jenis === 'Sukses') { s = 'Sukses'; poinAwal = 3; }
+                else if (jenis === 'Good') { s = 'Good'; poinAwal = 1; }
+                else { s = 'Hadir'; poinAwal = 0; }
+
+                siswa = { nama: namaInput, status: 'Hadir', tambahan: s, poin: poinAwal };
+                siswaList.push(siswa);
+            } 
+            // Jika siswa SUDAH ADA di tabel (Terpilih lagi untuk ke-2 kali atau lebih)
+            else {
+                if (jenis === 'Sukses') { 
+                    siswa.tambahan = 'Sukses'; 
+                    siswa.poin += 3; // Ditambahkan 3 poin ke nilai lamanya
+                }
+                else if (jenis === 'Good') { 
+                    siswa.tambahan = 'Good'; 
+                    siswa.poin += 1; // Ditambahkan 1 poin ke nilai lamanya
+                }
+                else { 
+                    // Jika diklik 'Hadir', status tambahan berubah tapi poin TIDAK BERTAMBAH (tetap)
+                    siswa.tambahan = 'Hadir'; 
+                }
+            }
+
+            updateTabel();
+            resetZoom();
+            
+            // Kembalikan layar ke paling atas otomatis setelah beri poin
+            document.querySelector('header').scrollIntoView({ behavior: 'smooth' });
+        }
+
+        function eksporPDF() {
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF();
+            doc.text("REKAP DATA ABSENSI KELAS - FACEPICK", 14, 15);
+            let rows = [];
+            siswaList.forEach((s, idx) => rows.push([idx + 1, s.nama, s.status, s.tambahan, s.poin]));
+            doc.autoTable({ head: [['No', 'Nama', 'Keterangan', 'Tambahan Poin', 'Total Skor']], body: rows, startY: 22 });
+            doc.save("Rekap_Absensi_FacePick.pdf");
+        }
+
+        window.onload = updateTabel;
+    </script>
+</body>
+</html>
