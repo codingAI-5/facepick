@@ -96,8 +96,6 @@
         .badge-alpa { background: #fee2e2; color: #b91c1c; }
 
         /* BINGKAI KOTAK KAMERA STABIL */
-        .camera-container { display: flex; flex-direction: column; align-items: center; gap: 15px; }
-        
         .camera-box {
             position: relative;
             width: 100%;
@@ -181,7 +179,7 @@
 
         <div id="facepick-tab" class="tab-panel">
             <h2>🎯 Kamera Pemburu (Mengejar Wajah Acak)</h2>
-            <div class="camera-container">
+            <div class="camera-container" style="display: flex; flex-direction: column; align-items: center; gap: 15px;">
                 
                 <div class="camera-box">
                     <div class="camera-scaler-wrapper" id="cameraScaler">
@@ -291,17 +289,23 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             faceapi.draw.drawDetections(canvas, [resizedDetections[randomIdx]]);
 
-             // ---- PERBAIKAN RUMUS ZOOM AKURAT ----
-// 1. Hitung titik tengah wajah yang harus digeser ke tengah layar
-const moveX = (scalerWrapper.clientWidth / 2) - faceCenterX;
-const moveY = (scalerWrapper.clientHeight / 2) - faceCenterY;
+            // ---- PERBAIKAN RUMUS ZOOM AKURAT (SUDAH DIKOREKSI TKJ) ----
+            const zoomFactor = 3;
 
-// 2. Karena kamera dicermin (scaleX(-1)), nilai moveX harus dibalik agar pas di muka
-const moveXMirrored = -moveX; 
+            // Hitung titik tengah wajah target secara real-time berdasarkan koordinat AI
+            const faceCenterX = targetFace.x + (targetFace.width / 2);
+            const faceCenterY = targetFace.y + (targetFace.height / 2);
 
-// 3. Eksekusi: TRANSLATE DULUAN baru SCALE (Ini kuncinya agar tidak meleset ke bawah)
-scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale(${zoomFactor})`;
-            
+            // Hitung pixel pergeseran bingkai kamera
+            const moveX = (scalerWrapper.clientWidth / 2) - faceCenterX;
+            const moveY = (scalerWrapper.clientHeight / 2) - faceCenterY;
+
+            // Koreksi Efek Cermin Kamera Depan
+            const moveXMirrored = -moveX; 
+
+            // Eksekusi Transformasi Translasi dan Skala Kedekatan Kamera
+            scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale(${zoomFactor})`;
+            // ---- AKHIR PERBAIKAN RUMUS ----
             
             statusText.innerText = `🎯 TARGET DIKUNCI! (Total terdeteksi di kelas: ${resizedDetections.length} orang)`;
             statusText.style.color = "var(--danger)";
@@ -370,12 +374,10 @@ scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale
             const namaInput = targetNameInput.value.trim();
             if(!namaInput) return alert("Silakan ketik nama siswa terpilih!");
 
-            // Cari apakah nama siswa ini sudah ada di database tabel atau belum
             let siswa = siswaList.find(s => s.nama.toLowerCase() === namaInput.toLowerCase());
             
-            // Jika siswa BELUM ADA di tabel (Baru pertama kali di-input lewat kamera)
             if(!siswa) {
-                let poinAwal = 0; // Default awal banget 0 poin
+                let poinAwal = 0;
                 if (jenis === 'Sukses') { s = 'Sukses'; poinAwal = 3; }
                 else if (jenis === 'Good') { s = 'Good'; poinAwal = 1; }
                 else { s = 'Hadir'; poinAwal = 0; }
@@ -383,18 +385,16 @@ scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale
                 siswa = { nama: namaInput, status: 'Hadir', tambahan: s, poin: poinAwal };
                 siswaList.push(siswa);
             } 
-            // Jika siswa SUDAH ADA di tabel (Terpilih lagi untuk ke-2 kali atau lebih)
             else {
                 if (jenis === 'Sukses') { 
                     siswa.tambahan = 'Sukses'; 
-                    siswa.poin += 3; // Ditambahkan 3 poin ke nilai lamanya
+                    siswa.poin += 3;
                 }
                 else if (jenis === 'Good') { 
                     siswa.tambahan = 'Good'; 
-                    siswa.poin += 1; // Ditambahkan 1 poin ke nilai lamanya
+                    siswa.poin += 1;
                 }
                 else { 
-                    // Jika diklik 'Hadir', status tambahan berubah tapi poin TIDAK BERTAMBAH (tetap)
                     siswa.tambahan = 'Hadir'; 
                 }
             }
@@ -402,7 +402,6 @@ scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale
             updateTabel();
             resetZoom();
             
-            // Kembalikan layar ke paling atas otomatis setelah beri poin
             document.querySelector('header').scrollIntoView({ behavior: 'smooth' });
         }
 
