@@ -291,19 +291,17 @@
             ctx.clearRect(0, 0, canvas.width, canvas.height);
             faceapi.draw.drawDetections(canvas, [resizedDetections[randomIdx]]);
 
-            // Koordinat pusat wajah asli
-            const faceCenterX = targetFace.x + (targetFace.width / 2);
-            const faceCenterY = targetFace.y + (targetFace.height / 2);
+             // ---- PERBAIKAN RUMUS ZOOM AKURAT ----
+// 1. Hitung titik tengah wajah yang harus digeser ke tengah layar
+const moveX = (scalerWrapper.clientWidth / 2) - faceCenterX;
+const moveY = (scalerWrapper.clientHeight / 2) - faceCenterY;
 
-            const zoomFactor = 2.5; 
+// 2. Karena kamera dicermin (scaleX(-1)), nilai moveX harus dibalik agar pas di muka
+const moveXMirrored = -moveX; 
+
+// 3. Eksekusi: TRANSLATE DULUAN baru SCALE (Ini kuncinya agar tidak meleset ke bawah)
+scalerWrapper.style.transform = `translate(${moveXMirrored}px, ${moveY}px) scale(${zoomFactor})`;
             
-            // 🔥 PERBAIKAN RUMUS: Menghitung perpindahan secara akurat agar berpusat ke koordinat wajah target
-            // Karena video dibalik kaca cermin (scaleX -1), titik geser dihitung relatif dari kanan bingkai
-            const moveX = (scalerWrapper.clientWidth / 2) - (faceCenterX * zoomFactor);
-            const moveY = (scalerWrapper.clientHeight / 2) - (faceCenterY * zoomFactor) + 20; // +20 offset vertikal biar dahi gak kepotong
-
-            // Eksekusi zoom internal dinamis mengarah ke wajah siswa yang terpilih
-            scalerWrapper.style.transform = `scale(${zoomFactor}) translate(${moveX / zoomFactor}px, ${moveY / zoomFactor}px)`;
             
             statusText.innerText = `🎯 TARGET DIKUNCI! (Total terdeteksi di kelas: ${resizedDetections.length} orang)`;
             statusText.style.color = "var(--danger)";
